@@ -1,11 +1,24 @@
-<!doctype html>
-<html lang="en-us">
+<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Adama Online</title>
+  <meta charset="utf-8">
+  <title>Adama Online</title>
+  <!-- conditionally load polyfills - thanks to https://github.com/geelen/x-gif -->
+  <script>
+  if ('registerElement' in document
+  && 'createShadowRoot' in HTMLElement.prototype
+  && 'import' in document.createElement('link')
+  && 'content' in document.createElement('template')) {
+  } else {
+    document.write('<script src="assets/webcomponentsjs/webcomponents.min.js"><\/script>');
+  }
+  </script>
+  <link rel="import" href="assets/app-router/app-router.html">
 </head>
-<body>
-    Adama Online
+<body unresolved>
+  <app-router mode="hash">
+    <app-route path="/" import="elements/page-home.html"></app-route>
+    <app-route path="*" redirect="/"></app-route>
+  </app-router>
 </body>
 </html>
