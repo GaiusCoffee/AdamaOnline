@@ -7,8 +7,6 @@ var express = require('express'),
     bodyParser = require('body-parser'),
     compression = require('compression'),
     app = express();
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
 app.use(compression());
 app.use(favicon(__dirname + '/public/favicon.ico'));
 app.use(logger('dev'));
