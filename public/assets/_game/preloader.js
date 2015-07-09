@@ -6,19 +6,24 @@
     };
     Adama.Preloader.prototype = {
         preload: function () {
-            this.background = this.add.sprite(0, 0, 'preloaderBackground');
-            this.preloadBar = this.add.sprite(300, 400, 'preloaderBar');
-            //	This sets the preloadBar sprite as a loader sprite.
-            //	What that does is automatically crop the sprite from 0 to full-width
-            //	as the files below are loaded in.
+            this.background = this.add.tileSprite(
+                0, 0, 
+                this.game.width, this.game.height, 
+                'titleBG');
+            this.preloadBar = this.add.sprite(
+                (this.game.width / 2), 
+                (this.game.height / 2), 
+                'titlePreloaderBar');
+            this.preloadBar.anchor.set(0.5, 0.5);
             this.load.setPreloadSprite(this.preloadBar);
-            //	Here we load the rest of the assets our game needs.
-            //	You can find all of these assets in the Phaser Examples repository
-            this.load.image('tetris1', '../assets/_images/test/tetrisblock1.png');
-            this.load.image('tetris2', '../assets/_images/test/tetrisblock2.png');
-            this.load.image('tetris3', '../assets/_images/test/tetrisblock3.png');
-            this.load.image('hotdog', '../assets/_images/test/hotdog.png');
-            this.load.image('starfield', '../assets/_images/test/deep-space.jpg');
+            this.load.image('titleButtonUpOnline', 
+                            '../assets/_images/ui/blue_button_up.png');
+            this.load.image('titleButtonDownOnline', 
+                            '../assets/_images/ui/blue_button_down.png');
+            this.load.image('titleButtonUpOffline', 
+                            '../assets/_images/ui/grey_button_up.png');
+            this.load.image('titleButtonDownOffline', 
+                            '../assets/_images/ui/grey_button_down.png');
         },
         create: function () {
             this.state.start('Title');

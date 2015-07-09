@@ -1,34 +1,33 @@
 (function (Adama,undefined){
     Adama.Title = function(game){
-        this.bg;
-        this.spriteTopLeft;
-        this.spriteTopRight;
-        this.spriteBottomLeft;
-        this.spriteBottomRight;
+        this.background = null;
+        this.titleButtonOnline = null;
+        this.titleButtonOffline = null;
     };
     Adama.Title.prototype = {
         create: function () {
-            this.bg = this.add.tileSprite(0, 0, this.game.width, this.game.height, 'starfield');
-            this.spriteTopLeft = this.add.sprite(0, 0, 'tetris3');
-            this.spriteTopRight = this.add.sprite(this.game.width, 0, 'tetris1');
-            this.spriteTopRight.anchor.set(1, 0);
-            this.spriteBottomLeft = this.add.sprite(0, this.game.height, 'tetris2');
-            this.spriteBottomLeft.anchor.set(0, 1);
-            this.spriteBottomRight = this.add.sprite(this.game.width, this.game.height, 'tetris3');
-            this.spriteBottomRight.anchor.set(1, 1);
+            this.bg = this.add.tileSprite(0, 0, this.game.width, this.game.height, 'titleBG');
+            this.titleButtonOnline = this.add.sprite(
+                (this.game.width / 2), 
+                (this.game.height / 1.5), 
+                'titleButtonUpOnline');
+            this.titleButtonOnline.anchor.set(0.5, 0);
+            this.titleButtonOffline = this.add.sprite(
+                (this.game.width / 2), 
+                (this.game.height / 1.3), 
+                'titleButtonUpOffline');
+            this.titleButtonOffline.anchor.set(0.5, 0);
         },
         update: function() {
             // Do some nice funky main menu effect here
         },
         resize: function (width, height) {
-            //	If the game container is resized this function will be called automatically.
-            //	You can use it to align sprites that should be fixed in place and other responsive display things.
             this.bg.width = width;
-            this.bg.height = height;
-            this.spriteTopRight.x = this.game.width;
-            this.spriteBottomLeft.y = this.game.height;
-            this.spriteBottomRight.x = this.game.width;
-            this.spriteBottomRight.y = this.game.height;
+            this.bg.height = height;            
+            this.titleButtonOnline.x = (this.game.width / 2);
+            this.titleButtonOnline.y = (this.game.height / 1.5);
+            this.titleButtonOffline.x = (this.game.width / 2);
+            this.titleButtonOffline.y = (this.game.height / 1.3);
         }
     };
 }(window.Adama = window.Adama || {}));

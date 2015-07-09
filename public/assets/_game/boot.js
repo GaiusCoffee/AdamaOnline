@@ -8,8 +8,10 @@
         },
         preload: function () {
             //  Here we load the assets required for our preloader (in this case a background and a loading bar)
-            this.load.image('preloaderBackground', '../assets/_images/test/sky2.png');
-            this.load.image('preloaderBar', '../assets/_images/test/helix.png');
+            this.load.image('titleBG',              //
+                            '../assets/_images/bg/blue.png');
+            this.load.image('titlePreloaderBar',    //
+                            '../assets/_images/ui/barHorizontal_blue.png');
         },
         create: function () {
             this.state.start('Preloader');
