@@ -1,5 +1,4 @@
-// Type definitions for PIXI 2.2.8 2015-03-24
-// Project: https://github.com/GoodBoyDigital/pixi.js/
+// Type definitions for PIXI with Phaser Deviations. 
 
 declare module PIXI {
 
@@ -51,8 +50,10 @@ declare module PIXI {
     export var glContexts: WebGLRenderingContext[];
     export var instances: any[];
 
-    export var BaseTextureCache: { [key: string]: BaseTexture }
-    export var TextureCache: { [key: string]: Texture }
+    export var BaseTextureCache: { [key: string]: BaseTexture };
+    export var TextureCache: { [key: string]: Texture };
+    export var TextureSilentFail: boolean;
+    export var BitmapText: { fonts: {} };
 
     export function isPowerOfTwo(width: number, height: number): boolean;
 
@@ -178,12 +179,12 @@ declare module PIXI {
 
     export class AbstractFilter {
 
-        constructor(fragmentSrc: string[], uniforms: any);
+        constructor(fragmentSrc: string | string[], uniforms: any);
 
         dirty: boolean;
         padding: number;
         uniforms: any;
-        fragmentSrc: string[];
+        fragmentSrc: string | string[];
 
         apply(frameBuffer: WebGLFramebuffer): void;
         syncUniforms(): void;
@@ -264,6 +265,7 @@ declare module PIXI {
         premultipliedAlpha: boolean;
         resolution: number;
         scaleMode: scaleModes;
+        skipRender: boolean;
         source: HTMLImageElement;
         width: number;
 
@@ -275,7 +277,7 @@ declare module PIXI {
         once(eventName: string, fn: Function): Function;
         off(eventName: string, fn: Function): Function;
         removeAllEventListeners(eventName: string): void;
-
+        forceLoaded(width: number, height: number): void;
         destroy(): void;
         dirty(): void;
         updateSourceImage(newSrc: string): void;
@@ -302,26 +304,6 @@ declare module PIXI {
         removeAllEventListeners(eventName: string): void;
 
         load(): void;
-
-    }
-
-    export class BitmapText extends DisplayObjectContainer {
-
-        static fonts: any;
-
-        constructor(text: string, style: BitmapTextStyle);
-
-        dirty: boolean;
-        fontName: string;
-        fontSize: number;
-        maxWidth: number;
-        textWidth: number;
-        textHeight: number;
-        tint: number;
-        style: BitmapTextStyle;
-
-        setText(text: string): void;
-        setStyle(style: BitmapTextStyle): void;
 
     }
 
@@ -354,8 +336,20 @@ declare module PIXI {
         height: number;
         width: number;
 
+        destroy(): void;
         clear(): void;
         resize(width: number, height: number): void;
+
+    }
+
+    export class CanvasPool {
+
+        static create(parent: HTMLElement, width?: number, height?: number): HTMLCanvasElement;
+        static getFirst(): HTMLCanvasElement;
+        static remove(parent: HTMLElement): void;
+        static removeByCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement;
+        static getTotal(): number;
+        static getFree(): number;
 
     }
 
@@ -396,10 +390,7 @@ declare module PIXI {
         static tintWithMultiply(texture: Texture, color: number, canvas: HTMLCanvasElement): void;
         static tintWithOverlay(texture: Texture, color: number, canvas: HTMLCanvasElement): void;
         static tintWithPerPixel(texture: Texture, color: number, canvas: HTMLCanvasElement): void;
-        static roundColor(color: number): void;
 
-        static cacheStepsPerColorChannel: number;
-        static convertTintToImage: boolean;
         static canUseMultiply: boolean;
         static tintMethod: any;
 
@@ -484,6 +475,9 @@ declare module PIXI {
         stage: Stage;
         visible: boolean;
         worldAlpha: number;
+        worldPosition: PIXI.Point;
+        worldScale: PIXI.Point;
+        worldRotation: number;
         worldVisible: boolean;
         x: number;
         y: number;
@@ -492,7 +486,7 @@ declare module PIXI {
         displayObjectUpdateTransform(): void;
         getBounds(matrix?: Matrix): Rectangle;
         getLocalBounds(): Rectangle;
-        generateTexture(resolution: number, scaleMode: scaleModes, renderer: PixiRenderer): RenderTexture;
+        generateTexture(resolution?: number, scaleMode?: number, renderer?: PixiRenderer): Texture;
         mousedown(e: InteractionData): void;
         mouseout(e: InteractionData): void;
         mouseover(e: InteractionData): void;
@@ -511,7 +505,7 @@ declare module PIXI {
         touchendoutside(e: InteractionData): void;
         touchstart(e: InteractionData): void;
         touchmove(e: InteractionData): void;
-        updateTransform(): void;
+        updateTransform(parent?: PIXI.DisplayObjectContainer): void;
 
     }
 
@@ -629,7 +623,7 @@ declare module PIXI {
         bezierCurveTo(cpX: number, cpY: number, cpX2: number, cpY2: number, toX: number, toY: number): Graphics;
         clear(): Graphics;
         destroyCachedSprite(): void;
-        drawCircle(x: number, y: number, radius: number): Graphics;
+        drawCircle(x: number, y: number, diameter: number): Graphics;
         drawEllipse(x: number, y: number, width: number, height: number): Graphics;
         drawPolygon(...path: any[]): Graphics;
         drawRect(x: number, y: number, width: number, height: number): Graphics;
@@ -639,6 +633,7 @@ declare module PIXI {
         drawShape(shape: Ellipse): GraphicsData;
         drawShape(shape: Polygon): GraphicsData;
         endFill(): Graphics;
+        generateTexture(resolution?: number, scaleMode?: number): Texture;
         lineStyle(lineWidth?: number, color?: number, alpha?: number): Graphics;
         lineTo(x: number, y: number): Graphics;
         moveTo(x: number, y: number): Graphics;
@@ -1028,7 +1023,7 @@ declare module PIXI {
         texture: Texture;
         tint: number;
 
-        setTexture(texture: Texture): void;
+        setTexture(texture: Texture, destroyBase?: boolean): void;
 
     }
 
@@ -1102,23 +1097,6 @@ declare module PIXI {
 
     }
 
-    export class Text extends Sprite {
-
-        constructor(text: string, style?: TextStyle);
-
-        static fontPropertiesCanvas: any;
-        static fontPropertiesContext: any;
-        static fontPropertiesCache: any;
-
-        context: CanvasRenderingContext2D;
-        resolution: number;
-
-        destroy(destroyTexture: boolean): void;
-        setStyle(style: TextStyle): void;
-        setText(text: string): void;
-
-    }
-
     export class Texture implements Mixin {
 
         static emptyTexture: Texture;
@@ -1160,10 +1138,14 @@ declare module PIXI {
 
         constructor(texture: Texture, width: number, height: number);
 
+        canvasBuffer: PIXI.CanvasBuffer;
         blendMode: number;
+        refreshTexture: boolean;
         texture: Texture;
+        textureDebug: boolean;
         tint: number;
         tilePosition: Point;
+        tilePattern: PIXI.Texture;
         tileScale: Point;
         tileScaleOffset: Point;
 
@@ -1216,15 +1198,21 @@ declare module PIXI {
 
         static baseTextureFromVideo(video: HTMLVideoElement, scaleMode: number): BaseTexture;
         static textureFromVideo(video: HTMLVideoElement, scaleMode: number): Texture;
-        static fromUrl(videoSrc: string, scaleMode: number): Texture;
+        static fromUrl(videoSrc: string, scaleMode?: number, autoPlay?: boolean, type?: string, loop?: boolean): Texture;
 
+        controls: boolean;
         autoUpdate: boolean;
+        type: string;
+
+        changeSource(src: string, type: string, loop: boolean): void;
+        play(): void;
+        stop(): void;
 
         destroy(): void;
         updateBound(): void;
-        onPlayStart(): void;
-        onPlayStop(): void;
-        onCanPlay(): void;
+        onPlayStart: () => void;
+        onPlayStop: () => void;
+        onCanPlay: (event: any) => void;
 
     }
 
@@ -1452,7 +1440,7 @@ declare module PIXI {
         getCanvas(): HTMLCanvasElement;
         getImage(): HTMLImageElement;
         resize(width: number, height: number, updateBase: boolean): void;
-        render(displayObject: DisplayObject, position?: Point, clear?: boolean): void;
+        render(displayObject: DisplayObject, matrix?: Matrix, clear?: boolean): void;
 
     }
 

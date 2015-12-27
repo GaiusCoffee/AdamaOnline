@@ -5,9 +5,11 @@
 */
 
 /**
-* A Rope is a Sprite that has a repeating texture. The texture can be scrolled and scaled and will automatically wrap on the edges as it does so.
-* Please note that Ropes, as with normal Sprites, have no input handler or physics bodies by default. Both need enabling.
-* Example usage: https://github.com/codevinsky/phaser-rope-demo/blob/master/dist/demo.js
+* A Rope is a Sprite that has a repeating texture.
+* 
+* The texture will automatically wrap on the edges as it moves.
+* 
+* Please note that Ropes cannot have an input handler.
 *
 * @class Phaser.Rope
 * @constructor
@@ -22,7 +24,6 @@
 * @extends Phaser.Component.Delta
 * @extends Phaser.Component.Destroy
 * @extends Phaser.Component.FixedToCamera
-* @extends Phaser.Component.InputEnabled
 * @extends Phaser.Component.InWorld
 * @extends Phaser.Component.LifeSpan
 * @extends Phaser.Component.LoadTexture
@@ -55,13 +56,7 @@ Phaser.Rope = function (game, x, y, key, frame, points) {
     */
     this.type = Phaser.ROPE;
 
-    /**
-    * @property {Phaser.Point} _scroll - Internal cache var.
-    * @private
-    */
-    this._scroll = new Phaser.Point();
-
-    PIXI.Rope.call(this, key, this.points);
+    PIXI.Rope.call(this, PIXI.TextureCache['__default'], this.points);
 
     Phaser.Component.Core.init.call(this, game, x, y, key, frame);
 
@@ -80,7 +75,6 @@ Phaser.Component.Core.install.call(Phaser.Rope.prototype, [
     'Delta',
     'Destroy',
     'FixedToCamera',
-    'InputEnabled',
     'InWorld',
     'LifeSpan',
     'LoadTexture',
@@ -103,16 +97,6 @@ Phaser.Rope.prototype.preUpdateCore = Phaser.Component.Core.preUpdate;
 * @memberof Phaser.Rope
 */
 Phaser.Rope.prototype.preUpdate = function() {
-
-    if (this._scroll.x !== 0)
-    {
-        this.tilePosition.x += this._scroll.x * this.game.time.physicsElapsed;
-    }
-
-    if (this._scroll.y !== 0)
-    {
-        this.tilePosition.y += this._scroll.y * this.game.time.physicsElapsed;
-    }
 
     if (!this.preUpdatePhysics() || !this.preUpdateLifeSpan() || !this.preUpdateInWorld())
     {
@@ -139,7 +123,7 @@ Phaser.Rope.prototype.update = function() {
 };
 
 /**
-* Resets the Rope. This places the Rope at the given x/y world coordinates, resets the tilePosition and then
+* Resets the Rope. This places the Rope at the given x/y world coordinates and then
 * sets alive, exists, visible and renderable all to true. Also resets the outOfBounds state.
 * If the Rope has a physics body that too is reset.
 *
@@ -153,15 +137,12 @@ Phaser.Rope.prototype.reset = function(x, y) {
 
     Phaser.Component.Reset.prototype.reset.call(this, x, y);
 
-    this.tilePosition.x = 0;
-    this.tilePosition.y = 0;
-
     return this;
 
 };
 
 /**
-* A Rope will call it's updateAnimation function on each update loop if it has one
+* A Rope will call its updateAnimation function on each update loop if it has one.
 *
 * @name Phaser.Rope#updateAnimation
 * @property {function} updateAnimation - Set to a function if you'd like the rope to animate during the update phase. Set to false or null to remove it.
@@ -208,20 +189,21 @@ Object.defineProperty(Phaser.Rope.prototype, "segments", {
         {
             index = i * 4;
 
-            x1 = this.verticies[index];
-            y1 = this.verticies[index + 1];
-            x2 = this.verticies[index + 4];
-            y2 = this.verticies[index + 3];
+            x1 = this.vertices[index] * this.scale.x;
+            y1 = this.vertices[index + 1] * this.scale.y;
+            x2 = this.vertices[index + 4] * this.scale.x;
+            y2 = this.vertices[index + 3] * this.scale.y;
 
-            width = Phaser.Math.difference(x1,x2);
-            height = Phaser.Math.difference(y1,y2);
+            width = Phaser.Math.difference(x1, x2);
+            height = Phaser.Math.difference(y1, y2);
 
             x1 += this.world.x;
             y1 += this.world.y;
-            rect = new Phaser.Rectangle(x1,y1, width, height);
+            rect = new Phaser.Rectangle(x1, y1, width, height);
             segments.push(rect);
         }
 
         return segments;
     }
+
 });

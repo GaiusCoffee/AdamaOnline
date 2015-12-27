@@ -5,7 +5,8 @@
 */
 
 /**
-* The Canvas class handles everything related to creating the `canvas` DOM tag that Phaser will use, including styles, offset and aspect ratio.
+* The Canvas class handles everything related to creating the `canvas` DOM tag that Phaser will use, 
+* including styles, offset and aspect ratio.
 *
 * @class Phaser.Canvas
 * @static
@@ -16,17 +17,26 @@ Phaser.Canvas = {
     * Creates a `canvas` DOM element. The element is not automatically added to the document.
     *
     * @method Phaser.Canvas.create
+    * @param {object} parent - The object that will own the canvas that is created.
     * @param {number} [width=256] - The width of the canvas element.
     * @param {number} [height=256] - The height of the canvas element..
     * @param {string} [id=(none)] - If specified, and not the empty string, this will be set as the ID of the canvas element. Otherwise no ID will be set.
+    * @param {boolean} [skipPool=false] - If `true` the canvas will not be placed in the CanvasPool global.
     * @return {HTMLCanvasElement} The newly created canvas element.
     */
-    create: function (width, height, id) {
+    create: function (parent, width, height, id, skipPool) {
 
         width = width || 256;
         height = height || 256;
 
-        var canvas = document.createElement('canvas');
+        if (skipPool === undefined)
+        {
+            var canvas = PIXI.CanvasPool.create(parent, width, height);
+        }
+        else
+        {
+            var canvas = document.createElement('canvas');
+        }
 
         if (typeof id === 'string' && id !== '')
         {
@@ -35,7 +45,6 @@ Phaser.Canvas = {
 
         canvas.width = width;
         canvas.height = height;
-
         canvas.style.display = 'block';
 
         return canvas;
@@ -47,7 +56,7 @@ Phaser.Canvas = {
     *
     * @method Phaser.Canvas.setBackgroundColor
     * @param {HTMLCanvasElement} canvas - The canvas to set the background color on.
-    * @param {string} [color] - The color to set. Can be in the format 'rgb(r,g,b)', or '#RRGGBB' or any valid CSS color.
+    * @param {string} [color='rgb(0,0,0)'] - The color to set. Can be in the format 'rgb(r,g,b)', or '#RRGGBB' or any valid CSS color.
     * @return {HTMLCanvasElement} Returns the source canvas.
     */
     setBackgroundColor: function (canvas, color) {
@@ -118,7 +127,7 @@ Phaser.Canvas = {
 
         var target;
 
-        if (typeof overflowHidden === 'undefined') { overflowHidden = true; }
+        if (overflowHidden === undefined) { overflowHidden = true; }
 
         if (parent)
         {
@@ -201,13 +210,39 @@ Phaser.Canvas = {
     */
     setSmoothingEnabled: function (context, value) {
 
-        context['imageSmoothingEnabled'] = value;
-        context['mozImageSmoothingEnabled'] = value;
-        context['oImageSmoothingEnabled'] = value;
-        context['webkitImageSmoothingEnabled'] = value;
-        context['msImageSmoothingEnabled'] = value;
+        var s = Phaser.Canvas.getSmoothingPrefix(context);
+
+        if (s)
+        {
+            context[s] = value;
+        }
 
         return context;
+
+    },
+
+    /**
+    * Gets the Smoothing Enabled vendor prefix being used on the given context, or null if not set.
+    *
+    * @method Phaser.Canvas.getSmoothingPrefix
+    * @param {CanvasRenderingContext2D} context - The context to enable or disable the image smoothing on.
+    * @return {string|null} Returns the smoothingEnabled vendor prefix, or null if not set on the context.
+    */
+    getSmoothingPrefix: function (context) {
+
+        var vendor = [ 'i', 'webkitI', 'msI', 'mozI', 'oI' ];
+
+        for (var prefix in vendor)
+        {
+            var s = vendor[prefix] + 'mageSmoothingEnabled';
+
+            if (s in context)
+            {
+                return s;
+            }
+        }
+
+        return null;
 
     },
 
@@ -220,7 +255,12 @@ Phaser.Canvas = {
      */
     getSmoothingEnabled: function (context) {
 
-        return (context['imageSmoothingEnabled'] || context['mozImageSmoothingEnabled'] || context['oImageSmoothingEnabled'] || context['webkitImageSmoothingEnabled'] || context['msImageSmoothingEnabled']);
+        var s = Phaser.Canvas.getSmoothingPrefix(context);
+
+        if (s)
+        {
+            return context[s];
+        }
 
     },
 
@@ -234,12 +274,13 @@ Phaser.Canvas = {
     */
     setImageRenderingCrisp: function (canvas) {
 
-        canvas.style['image-rendering'] = 'optimizeSpeed';
-        canvas.style['image-rendering'] = 'crisp-edges';
-        canvas.style['image-rendering'] = '-moz-crisp-edges';
-        canvas.style['image-rendering'] = '-webkit-optimize-contrast';
-        canvas.style['image-rendering'] = 'optimize-contrast';
-        canvas.style['image-rendering'] = 'pixelated';
+        var types = [ 'optimizeSpeed', 'crisp-edges', '-moz-crisp-edges', '-webkit-optimize-contrast', 'optimize-contrast', 'pixelated' ];
+
+        for (var i = 0; i < types.length; i++)
+        {
+            canvas.style['image-rendering'] = types[i];
+        }
+
         canvas.style.msInterpolationMode = 'nearest-neighbor';
 
         return canvas;
@@ -264,24 +305,3 @@ Phaser.Canvas = {
     }
 
 };
-
-/**
-* Get the DOM offset values of any given element
-*
-* @method Phaser.Canvas.getOffset
-* @param {HTMLElement} element - The targeted element that we want to retrieve the offset.
-* @param {Phaser.Point} [point] - The point we want to take the x/y values of the offset.
-* @return {Phaser.Point} - A point objet with the offsetX and Y as its properties.
-* @deprecated 2.1.4 - Use {@link Phaser.DOM.getOffset}
-*/
-Phaser.Canvas.getOffset = Phaser.DOM.getOffset;
-
-/**
-* Returns the aspect ratio of the given canvas.
-*
-* @method Phaser.Canvas.getAspectRatio
-* @param {HTMLCanvasElement} canvas - The canvas to get the aspect ratio from.
-* @return {number} The ratio between canvas' width and height.
-* @deprecated 2.1.4 - User {@link Phaser.DOM.getAspectRatio}
-*/
-Phaser.Canvas.getAspectRatio = Phaser.DOM.getAspectRatio;

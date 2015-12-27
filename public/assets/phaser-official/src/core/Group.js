@@ -26,9 +26,9 @@
 */
 Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBodyType) {
 
-    if (typeof addToStage === 'undefined') { addToStage = false; }
-    if (typeof enableBody === 'undefined') { enableBody = false; }
-    if (typeof physicsBodyType === 'undefined') { physicsBodyType = Phaser.Physics.ARCADE; }
+    if (addToStage === undefined) { addToStage = false; }
+    if (enableBody === undefined) { enableBody = false; }
+    if (physicsBodyType === undefined) { physicsBodyType = Phaser.Physics.ARCADE; }
 
     /**
     * A reference to the currently running Game.
@@ -37,7 +37,7 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     */
     this.game = game;
 
-    if (typeof parent === 'undefined')
+    if (parent === undefined)
     {
         parent = game.world;
     }
@@ -52,6 +52,7 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     * The z-depth value of this object within its parent container/Group - the World is a Group as well.
     * This value must be unique for each child in a Group.
     * @property {integer} z
+    * @readOnly
     */
     this.z = 0;
 
@@ -106,6 +107,18 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     this.ignoreDestroy = false;
 
     /**
+    * A Group is that has `pendingDestroy` set to `true` is flagged to have its destroy method 
+    * called on the next logic update.
+    * You can set it directly to flag the Group to be destroyed on its next update.
+    * 
+    * This is extremely useful if you wish to destroy a Group from within one of its own callbacks 
+    * or a callback of one of its children.
+    * 
+    * @property {boolean} pendingDestroy
+    */
+    this.pendingDestroy = false;
+
+    /**
     * The type of objects that will be created when using {@link #create} or {@link #createMultiple}.
     *
     * Any object may be used but it should extend either Sprite or Image and accept the same constructor arguments:
@@ -115,13 +128,6 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     * @default {@link Phaser.Sprite}
     */
     this.classType = Phaser.Sprite;
-
-    /**
-    * The scale of the group container.
-    *
-    * @property {Phaser.Point} scale
-    */
-    this.scale = new Phaser.Point(1, 1);
 
     /**
     * The current display object that the group cursor is pointing to, if any. (Can be set manually.)
@@ -151,10 +157,28 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     /**
     * If {@link #enableBody} is true this is the type of physics body that is created on new Sprites.
     *
-    * The valid values are {@link Phaser.Physics.ARCADE}, {@link Phaser.Physics.P2}, {@link Phaser.Physics.NINJA}, etc.
+    * The valid values are {@link Phaser.Physics.ARCADE}, {@link Phaser.Physics.P2JS}, {@link Phaser.Physics.NINJA}, etc.
     * @property {integer} physicsBodyType
     */
     this.physicsBodyType = physicsBodyType;
+
+    /**
+    * If this Group contains Arcade Physics Sprites you can set a custom sort direction via this property.
+    * 
+    * It should be set to one of the Phaser.Physics.Arcade sort direction constants: 
+    * 
+    * Phaser.Physics.Arcade.SORT_NONE
+    * Phaser.Physics.Arcade.LEFT_RIGHT
+    * Phaser.Physics.Arcade.RIGHT_LEFT
+    * Phaser.Physics.Arcade.TOP_BOTTOM
+    * Phaser.Physics.Arcade.BOTTOM_TOP
+    *
+    * If set to `null` the Group will use whatever Phaser.Physics.Arcade.sortDirection is set to. This is the default behavior.
+    * 
+    * @property {integer} physicsSortDirection
+    * @default
+    */
+    this.physicsSortDirection = null;
 
     /**
     * This signal is dispatched when the group is destroyed.
@@ -186,11 +210,17 @@ Phaser.Group = function (game, parent, name, addToStage, enableBody, physicsBody
     this.cameraOffset = new Phaser.Point();
 
     /**
-    * An internal array used by physics for fast non z-index destructive sorting.
-    * @property {array} _hash
-    * @private
+    * The hash array is an array belonging to this Group into which you can add any of its children via Group.addToHash and Group.removeFromHash.
+    * 
+    * Only children of this Group can be added to and removed from the hash.
+    * 
+    * This hash is used automatically by Phaser Arcade Physics in order to perform non z-index based destructive sorting.
+    * However if you don't use Arcade Physics, or this isn't a physics enabled Group, then you can use the hash to perform your own
+    * sorting and filtering of Group children without touching their z-index (and therefore display draw order)
+    * 
+    * @property {array} hash
     */
-    this._hash = [];
+    this.hash = [];
 
     /**
     * The property on which children are sorted.
@@ -244,6 +274,8 @@ Phaser.Group.SORT_DESCENDING = 1;
 *
 * The child is automatically added to the top of the group and is displayed on top of every previous child.
 *
+* If Group.enableBody is set then a physics body will be created on the object, so long as one does not already exist.
+*
 * Use {@link #addAt} to control where a child is added. Use {@link #create} to create and add a new child.
 *
 * @method Phaser.Group#add
@@ -253,20 +285,22 @@ Phaser.Group.SORT_DESCENDING = 1;
 */
 Phaser.Group.prototype.add = function (child, silent) {
 
-    if (typeof silent === 'undefined') { silent = false; }
+    if (silent === undefined) { silent = false; }
 
     if (child.parent !== this)
     {
-        if (this.enableBody)
+        this.addChild(child);
+
+        child.z = this.children.length;
+
+        if (this.enableBody && child.body === null)
         {
             this.game.physics.enable(child, this.physicsBodyType);
         }
-
-        this.addChild(child);
-
-        this._hash.push(child);
-
-        child.z = this.children.length;
+        else if (child.body)
+        {
+            this.addToHash(child);
+        }
 
         if (!silent && child.events)
         {
@@ -284,20 +318,75 @@ Phaser.Group.prototype.add = function (child, silent) {
 };
 
 /**
-* Adds an array of existing display objects to this group.
+* Adds a child of this Group into the hash array.
+* This call will return false if the child is not a child of this Group, or is already in the hash.
 *
-* The children are automatically added to the top of the group, so render on-top of everything else within the group.
+* @method Phaser.Group#addToHash
+* @param {DisplayObject} child - The display object to add to this Groups hash. Must be a member of this Group already and not present in the hash.
+* @return {boolean} True if the child was successfully added to the hash, otherwise false.
+*/
+Phaser.Group.prototype.addToHash = function (child) {
+
+    if (child.parent === this)
+    {
+        var index = this.hash.indexOf(child);
+
+        if (index === -1)
+        {
+            this.hash.push(child);
+            return true;
+        }
+    }
+
+    return false;
+
+};
+
+/**
+* Removes a child of this Group from the hash array.
+* This call will return false if the child is not in the hash.
 *
-* TODO: Add ability to pass the children as parameters rather than having to be an array.
+* @method Phaser.Group#removeFromHash
+* @param {DisplayObject} child - The display object to remove from this Groups hash. Must be a member of this Group and in the hash.
+* @return {boolean} True if the child was successfully removed from the hash, otherwise false.
+*/
+Phaser.Group.prototype.removeFromHash = function (child) {
+
+    if (child)
+    {
+        var index = this.hash.indexOf(child);
+
+        if (index !== -1)
+        {
+            this.hash.splice(index, 1);
+            return true;
+        }
+    }
+
+    return false;
+
+};
+
+/**
+* Adds an array of existing Display Objects to this Group.
+*
+* The Display Objects are automatically added to the top of this Group, and will render on-top of everything already in this Group.
+*
+* As well as an array you can also pass another Group as the first argument. In this case all of the children from that
+* Group will be removed from it and added into this Group.
 *
 * @method Phaser.Group#addMultiple
-* @param {DisplayObject[]} children - An array of display objects to add as children.
+* @param {DisplayObject[]|Phaser.Group} children - An array of display objects or a Phaser.Group. If a Group is given then *all* children will be moved from it.
 * @param {boolean} [silent=false] - If true the children will not dispatch the `onAddedToGroup` event.
-* @return {DisplayObject[]} The array of children that were added to the group.
+* @return {DisplayObject[]|Phaser.Group} The array of children or Group of children that were added to this Group.
 */
 Phaser.Group.prototype.addMultiple = function (children, silent) {
 
-    if (Array.isArray(children))
+    if (children instanceof Phaser.Group)
+    {
+        children.moveAll(this, silent);
+    }
+    else if (Array.isArray(children))
     {
         for (var i = 0; i < children.length; i++)
         {
@@ -322,20 +411,22 @@ Phaser.Group.prototype.addMultiple = function (children, silent) {
 */
 Phaser.Group.prototype.addAt = function (child, index, silent) {
 
-    if (typeof silent === 'undefined') { silent = false; }
+    if (silent === undefined) { silent = false; }
 
     if (child.parent !== this)
     {
-        if (this.enableBody)
+        this.addChildAt(child, index);
+
+        this.updateZ();
+
+        if (this.enableBody && child.body === null)
         {
             this.game.physics.enable(child, this.physicsBodyType);
         }
-
-        this.addChildAt(child, index);
-
-        this._hash.push(child);
-
-        this.updateZ();
+        else if (child.body)
+        {
+            this.addToHash(child);
+        }
 
         if (!silent && child.events)
         {
@@ -357,7 +448,7 @@ Phaser.Group.prototype.addAt = function (child, index, silent) {
 *
 * @method Phaser.Group#getAt
 * @param {integer} index - The index to return the child from.
-* @return {DisplayObject} The child that was found at the given index, or -1 for an invalid index.
+* @return {DisplayObject|integer} The child that was found at the given index, or -1 for an invalid index.
 */
 Phaser.Group.prototype.getAt = function (index) {
 
@@ -375,26 +466,21 @@ Phaser.Group.prototype.getAt = function (index) {
 /**
 * Creates a new Phaser.Sprite object and adds it to the top of this group.
 *
-* Use {@link #classType} to change the type of object creaded.
+* Use {@link #classType} to change the type of object created.
 *
 * @method Phaser.Group#create
 * @param {number} x - The x coordinate to display the newly created Sprite at. The value is in relation to the group.x point.
 * @param {number} y - The y coordinate to display the newly created Sprite at. The value is in relation to the group.y point.
-* @param {string} key - The Game.cache key of the image that this Sprite will use.
-* @param {integer|string} [frame] - If the Sprite image contains multiple frames you can specify which one to use here.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Sprite during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Sprite is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
 * @param {boolean} [exists=true] - The default exists state of the Sprite.
 * @return {DisplayObject} The child that was created: will be a {@link Phaser.Sprite} unless {@link #classType} has been changed.
 */
 Phaser.Group.prototype.create = function (x, y, key, frame, exists) {
 
-    if (typeof exists === 'undefined') { exists = true; }
+    if (exists === undefined) { exists = true; }
 
     var child = new this.classType(this.game, x, y, key, frame);
-
-    if (this.enableBody)
-    {
-        this.game.physics.enable(child, this.physicsBodyType, this.enableBodyDebug);
-    }
 
     child.exists = exists;
     child.visible = exists;
@@ -402,9 +488,12 @@ Phaser.Group.prototype.create = function (x, y, key, frame, exists) {
 
     this.addChild(child);
 
-    this._hash.push(child);
-
     child.z = this.children.length;
+
+    if (this.enableBody)
+    {
+        this.game.physics.enable(child, this.physicsBodyType, this.enableBodyDebug);
+    }
 
     if (child.events)
     {
@@ -426,7 +515,7 @@ Phaser.Group.prototype.create = function (x, y, key, frame, exists) {
 * Useful if you need to quickly generate a pool of identical sprites, such as bullets.
 *
 * By default the sprites will be set to not exist and will be positioned at 0, 0 (relative to the group.x/y).
-* Use {@link #classType} to change the type of object creaded.
+* Use {@link #classType} to change the type of object created.
 *
 * @method Phaser.Group#createMultiple
 * @param {integer} quantity - The number of Sprites to create.
@@ -436,7 +525,7 @@ Phaser.Group.prototype.create = function (x, y, key, frame, exists) {
 */
 Phaser.Group.prototype.createMultiple = function (quantity, key, frame, exists) {
 
-    if (typeof exists === 'undefined') { exists = false; }
+    if (exists === undefined) { exists = false; }
 
     for (var i = 0; i < quantity; i++)
     {
@@ -446,7 +535,7 @@ Phaser.Group.prototype.createMultiple = function (quantity, key, frame, exists) 
 };
 
 /**
-* Internal method that re-applies all of the childrens Z values.
+* Internal method that re-applies all of the children's Z values.
 *
 * This must be called whenever children ordering is altered so that their `z` indices are correctly updated.
 *
@@ -475,7 +564,7 @@ Phaser.Group.prototype.updateZ = function () {
 */
 Phaser.Group.prototype.resetCursor = function (index) {
 
-    if (typeof index === 'undefined') { index = 0; }
+    if (index === undefined) { index = 0; }
 
     if (index > this.children.length - 1)
     {
@@ -790,7 +879,7 @@ Phaser.Group.prototype.hasProperty = function (child, key) {
 */
 Phaser.Group.prototype.setProperty = function (child, key, value, operation, force) {
 
-    if (typeof force === 'undefined') { force = false; }
+    if (force === undefined) { force = false; }
 
     operation = operation || 0;
 
@@ -860,7 +949,7 @@ Phaser.Group.prototype.setProperty = function (child, key, value, operation, for
 */
 Phaser.Group.prototype.checkProperty = function (child, key, value, force) {
 
-    if (typeof force === 'undefined') { force = false; }
+    if (force === undefined) { force = false; }
 
     //  We can't force a property in and the child doesn't have it, so abort.
     if (!Phaser.Utils.getProperty(child, key) && force)
@@ -894,12 +983,12 @@ Phaser.Group.prototype.checkProperty = function (child, key, value, force) {
 */
 Phaser.Group.prototype.set = function (child, key, value, checkAlive, checkVisible, operation, force) {
 
-    if (typeof force === 'undefined') { force = false; }
+    if (force === undefined) { force = false; }
 
     key = key.split('.');
 
-    if (typeof checkAlive === 'undefined') { checkAlive = false; }
-    if (typeof checkVisible === 'undefined') { checkVisible = false; }
+    if (checkAlive === undefined) { checkAlive = false; }
+    if (checkVisible === undefined) { checkVisible = false; }
 
     if ((checkAlive === false || (checkAlive && child.alive)) && (checkVisible === false || (checkVisible && child.visible)))
     {
@@ -926,9 +1015,9 @@ Phaser.Group.prototype.set = function (child, key, value, checkAlive, checkVisib
 */
 Phaser.Group.prototype.setAll = function (key, value, checkAlive, checkVisible, operation, force) {
 
-    if (typeof checkAlive === 'undefined') { checkAlive = false; }
-    if (typeof checkVisible === 'undefined') { checkVisible = false; }
-    if (typeof force === 'undefined') { force = false; }
+    if (checkAlive === undefined) { checkAlive = false; }
+    if (checkVisible === undefined) { checkVisible = false; }
+    if (force === undefined) { force = false; }
 
     key = key.split('.');
     operation = operation || 0;
@@ -961,9 +1050,9 @@ Phaser.Group.prototype.setAll = function (key, value, checkAlive, checkVisible, 
 */
 Phaser.Group.prototype.setAllChildren = function (key, value, checkAlive, checkVisible, operation, force) {
 
-    if (typeof checkAlive === 'undefined') { checkAlive = false; }
-    if (typeof checkVisible === 'undefined') { checkVisible = false; }
-    if (typeof force === 'undefined') { force = false; }
+    if (checkAlive === undefined) { checkAlive = false; }
+    if (checkVisible === undefined) { checkVisible = false; }
+    if (force === undefined) { force = false; }
 
     operation = operation || 0;
 
@@ -998,9 +1087,9 @@ Phaser.Group.prototype.setAllChildren = function (key, value, checkAlive, checkV
 */
 Phaser.Group.prototype.checkAll = function (key, value, checkAlive, checkVisible, force) {
 
-    if (typeof checkAlive === 'undefined') { checkAlive = false; }
-    if (typeof checkVisible === 'undefined') { checkVisible = false; }
-    if (typeof force === 'undefined') { force = false; }
+    if (checkAlive === undefined) { checkAlive = false; }
+    if (checkVisible === undefined) { checkVisible = false; }
+    if (force === undefined) { force = false; }
 
     for (var i = 0; i < this.children.length; i++)
     {
@@ -1185,7 +1274,7 @@ Phaser.Group.prototype.callbackFromArray = function (child, callback, length) {
 */
 Phaser.Group.prototype.callAll = function (method, context) {
 
-    if (typeof method === 'undefined')
+    if (method === undefined)
     {
         return;
     }
@@ -1195,7 +1284,7 @@ Phaser.Group.prototype.callAll = function (method, context) {
 
     var methodLength = method.length;
 
-    if (typeof context === 'undefined' || context === null || context === '')
+    if (context === undefined || context === null || context === '')
     {
         context = null;
     }
@@ -1251,6 +1340,12 @@ Phaser.Group.prototype.callAll = function (method, context) {
 * @protected
 */
 Phaser.Group.prototype.preUpdate = function () {
+
+    if (this.pendingDestroy)
+    {
+        this.destroy();
+        return false;
+    }
 
     if (!this.exists || !this.parent.exists)
     {
@@ -1368,7 +1463,7 @@ Phaser.Group.prototype.filter = function (predicate, checkExists) {
 */
 Phaser.Group.prototype.forEach = function (callback, callbackContext, checkExists) {
 
-    if (typeof checkExists === 'undefined') { checkExists = false; }
+    if (checkExists === undefined) { checkExists = false; }
 
     if (arguments.length <= 3)
     {
@@ -1386,7 +1481,10 @@ Phaser.Group.prototype.forEach = function (callback, callbackContext, checkExist
         // Using an array and pushing each element (not a slice!) is _significantly_ faster.
         var args = [null];
 
-        for (var i = 3; i < arguments.length; i++) { args.push(arguments[i]); }
+        for (var i = 3; i < arguments.length; i++)
+        {
+            args.push(arguments[i]);
+        }
 
         for (var i = 0; i < this.children.length; i++)
         {
@@ -1502,8 +1600,8 @@ Phaser.Group.prototype.sort = function (key, order) {
         return;
     }
 
-    if (typeof key === 'undefined') { key = 'z'; }
-    if (typeof order === 'undefined') { order = Phaser.Group.SORT_ASCENDING; }
+    if (key === undefined) { key = 'z'; }
+    if (order === undefined) { order = Phaser.Group.SORT_ASCENDING; }
 
     this._sortProperty = key;
 
@@ -1676,47 +1774,134 @@ Phaser.Group.prototype.iterate = function (key, value, returnType, callback, cal
 
 /**
 * Get the first display object that exists, or doesn't exist.
+* 
+* You can use the optional argument `createIfNull` to create a new Game Object if none matching your exists argument were found in this Group.
+*
+* It works by calling `Group.create` passing it the parameters given to this method, and returning the new child.
+*
+* If a child *was* found , `createIfNull` is `false` and you provided the additional arguments then the child
+* will be reset and/or have a new texture loaded on it. This is handled by `Group.resetChild`.
 *
 * @method Phaser.Group#getFirstExists
 * @param {boolean} [exists=true] - If true, find the first existing child; otherwise find the first non-existing child.
-* @return {any} The first child, or null if none found.
+* @param {boolean} [createIfNull=false] - If `true` and no alive children are found a new one is created.
+* @param {number} [x] - The x coordinate to reset the child to. The value is in relation to the group.x point.
+* @param {number} [y] - The y coordinate to reset the child to. The value is in relation to the group.y point.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Sprite during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Sprite is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
+* @return {DisplayObject} The first child, or `null` if none found and `createIfNull` was false.
 */
-Phaser.Group.prototype.getFirstExists = function (exists) {
+Phaser.Group.prototype.getFirstExists = function (exists, createIfNull, x, y, key, frame) {
+
+    if (createIfNull === undefined) { createIfNull = false; }
 
     if (typeof exists !== 'boolean')
     {
         exists = true;
     }
 
-    return this.iterate('exists', exists, Phaser.Group.RETURN_CHILD);
+    var child = this.iterate('exists', exists, Phaser.Group.RETURN_CHILD);
+
+    return (child === null && createIfNull) ? this.create(x, y, key, frame) : this.resetChild(child, x, y, key, frame);
 
 };
 
 /**
 * Get the first child that is alive (`child.alive === true`).
 *
-* This is handy for checking if everything has been wiped out, or choosing a squad leader, etc.
+* This is handy for choosing a squad leader, etc.
+*
+* You can use the optional argument `createIfNull` to create a new Game Object if no alive ones were found in this Group.
+*
+* It works by calling `Group.create` passing it the parameters given to this method, and returning the new child.
+*
+* If a child *was* found , `createIfNull` is `false` and you provided the additional arguments then the child
+* will be reset and/or have a new texture loaded on it. This is handled by `Group.resetChild`.
 *
 * @method Phaser.Group#getFirstAlive
-* @return {any} The first alive child, or null if none found.
+* @param {boolean} [createIfNull=false] - If `true` and no alive children are found a new one is created.
+* @param {number} [x] - The x coordinate to reset the child to. The value is in relation to the group.x point.
+* @param {number} [y] - The y coordinate to reset the child to. The value is in relation to the group.y point.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Sprite during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Sprite is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
+* @return {DisplayObject} The alive dead child, or `null` if none found and `createIfNull` was false.
 */
-Phaser.Group.prototype.getFirstAlive = function () {
+Phaser.Group.prototype.getFirstAlive = function (createIfNull, x, y, key, frame) {
 
-    return this.iterate('alive', true, Phaser.Group.RETURN_CHILD);
+    if (createIfNull === undefined) { createIfNull = false; }
+
+    var child = this.iterate('alive', true, Phaser.Group.RETURN_CHILD);
+
+    return (child === null && createIfNull) ? this.create(x, y, key, frame) : this.resetChild(child, x, y, key, frame);
 
 };
 
 /**
 * Get the first child that is dead (`child.alive === false`).
 *
-* This is handy for checking if everything has been wiped out, or choosing a squad leader, etc.
+* This is handy for checking if everything has been wiped out and adding to the pool as needed.
+*
+* You can use the optional argument `createIfNull` to create a new Game Object if no dead ones were found in this Group.
+*
+* It works by calling `Group.create` passing it the parameters given to this method, and returning the new child.
+*
+* If a child *was* found , `createIfNull` is `false` and you provided the additional arguments then the child
+* will be reset and/or have a new texture loaded on it. This is handled by `Group.resetChild`.
 *
 * @method Phaser.Group#getFirstDead
-* @return {any} The first dead child, or null if none found.
+* @param {boolean} [createIfNull=false] - If `true` and no dead children are found a new one is created.
+* @param {number} [x] - The x coordinate to reset the child to. The value is in relation to the group.x point.
+* @param {number} [y] - The y coordinate to reset the child to. The value is in relation to the group.y point.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Sprite during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Sprite is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
+* @return {DisplayObject} The first dead child, or `null` if none found and `createIfNull` was false.
 */
-Phaser.Group.prototype.getFirstDead = function () {
+Phaser.Group.prototype.getFirstDead = function (createIfNull, x, y, key, frame) {
 
-    return this.iterate('alive', false, Phaser.Group.RETURN_CHILD);
+    if (createIfNull === undefined) { createIfNull = false; }
+
+    var child = this.iterate('alive', false, Phaser.Group.RETURN_CHILD);
+
+    return (child === null && createIfNull) ? this.create(x, y, key, frame) : this.resetChild(child, x, y, key, frame);
+
+};
+
+/**
+* Takes a child and if the `x` and `y` arguments are given it calls `child.reset(x, y)` on it.
+*
+* If the `key` and optionally the `frame` arguments are given, it calls `child.loadTexture(key, frame)` on it.
+*
+* The two operations are separate. For example if you just wish to load a new texture then pass `null` as the x and y values.
+*
+* @method Phaser.Group#resetChild
+* @param {DisplayObject} child - The child to reset and/or load the texture on.
+* @param {number} [x] - The x coordinate to reset the child to. The value is in relation to the group.x point.
+* @param {number} [y] - The y coordinate to reset the child to. The value is in relation to the group.y point.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Sprite during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Sprite is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
+* @return {DisplayObject} The child that was reset: usually a {@link Phaser.Sprite}.
+*/
+Phaser.Group.prototype.resetChild = function (child, x, y, key, frame) {
+
+    if (child === null)
+    {
+        return null;
+    }
+
+    if (x === undefined) { x = null; }
+    if (y === undefined) { y = null; }
+
+    if (x !== null && y !== null)
+    {
+        child.reset(x, y);
+    }
+
+    if (key !== undefined)
+    {
+        child.loadTexture(key, frame);
+    }
+
+    return child;
 
 };
 
@@ -1815,8 +2000,8 @@ Phaser.Group.prototype.getRandom = function (startIndex, length) {
 */
 Phaser.Group.prototype.remove = function (child, destroy, silent) {
 
-    if (typeof destroy === 'undefined') { destroy = false; }
-    if (typeof silent === 'undefined') { silent = false; }
+    if (destroy === undefined) { destroy = false; }
+    if (silent === undefined) { silent = false; }
 
     if (this.children.length === 0 || this.children.indexOf(child) === -1)
     {
@@ -1830,12 +2015,7 @@ Phaser.Group.prototype.remove = function (child, destroy, silent) {
 
     var removed = this.removeChild(child);
 
-    var index = this._hash.indexOf(removed);
-
-    if (index !== -1)
-    {
-        this._hash.splice(index, 1);
-    }
+    this.removeFromHash(child);
 
     this.updateZ();
 
@@ -1854,6 +2034,35 @@ Phaser.Group.prototype.remove = function (child, destroy, silent) {
 };
 
 /**
+* Moves all children from this Group to the Group given.
+*
+* @method Phaser.Group#moveAll
+* @param {Phaser.Group} group - The new Group to which the children will be moved to.
+* @param {boolean} [silent=false] - If true the children will not dispatch the `onAddedToGroup` event for the new Group.
+* @return {Phaser.Group} The Group to which all the children were moved.
+*/
+Phaser.Group.prototype.moveAll = function (group, silent) {
+
+    if (silent === undefined) { silent = false; }
+
+    if (this.children.length > 0 && group instanceof Phaser.Group)
+    {
+        do
+        {
+            group.add(this.children[0], silent);
+        }
+        while (this.children.length > 0);
+
+        this.hash = [];
+
+        this.cursor = null;
+    }
+
+    return group;
+
+};
+
+/**
 * Removes all children from this group, but does not remove the group from its parent.
 *
 * @method Phaser.Group#removeAll
@@ -1862,8 +2071,8 @@ Phaser.Group.prototype.remove = function (child, destroy, silent) {
 */
 Phaser.Group.prototype.removeAll = function (destroy, silent) {
 
-    if (typeof destroy === 'undefined') { destroy = false; }
-    if (typeof silent === 'undefined') { silent = false; }
+    if (destroy === undefined) { destroy = false; }
+    if (silent === undefined) { silent = false; }
 
     if (this.children.length === 0)
     {
@@ -1879,12 +2088,7 @@ Phaser.Group.prototype.removeAll = function (destroy, silent) {
 
         var removed = this.removeChild(this.children[0]);
 
-        var index = this._hash.indexOf(removed);
-
-        if (index !== -1)
-        {
-            this._hash.splice(index, 1);
-        }
+        this.removeFromHash(removed);
 
         if (destroy && removed)
         {
@@ -1893,7 +2097,7 @@ Phaser.Group.prototype.removeAll = function (destroy, silent) {
     }
     while (this.children.length > 0);
 
-    this._hash = [];
+    this.hash = [];
 
     this.cursor = null;
 
@@ -1910,9 +2114,9 @@ Phaser.Group.prototype.removeAll = function (destroy, silent) {
 */
 Phaser.Group.prototype.removeBetween = function (startIndex, endIndex, destroy, silent) {
 
-    if (typeof endIndex === 'undefined') { endIndex = this.children.length - 1; }
-    if (typeof destroy === 'undefined') { destroy = false; }
-    if (typeof silent === 'undefined') { silent = false; }
+    if (endIndex === undefined) { endIndex = this.children.length - 1; }
+    if (destroy === undefined) { destroy = false; }
+    if (silent === undefined) { silent = false; }
 
     if (this.children.length === 0)
     {
@@ -1935,12 +2139,7 @@ Phaser.Group.prototype.removeBetween = function (startIndex, endIndex, destroy, 
 
         var removed = this.removeChild(this.children[i]);
 
-        var index = this._hash.indexOf(removed);
-
-        if (index !== -1)
-        {
-            this._hash.splice(index, 1);
-        }
+        this.removeFromHash(removed);
 
         if (destroy && removed)
         {
@@ -1972,8 +2171,8 @@ Phaser.Group.prototype.destroy = function (destroyChildren, soft) {
 
     if (this.game === null || this.ignoreDestroy) { return; }
 
-    if (typeof destroyChildren === 'undefined') { destroyChildren = true; }
-    if (typeof soft === 'undefined') { soft = false; }
+    if (destroyChildren === undefined) { destroyChildren = true; }
+    if (soft === undefined) { soft = false; }
 
     this.onDestroy.dispatch(this, destroyChildren, soft);
 
@@ -1981,6 +2180,7 @@ Phaser.Group.prototype.destroy = function (destroyChildren, soft) {
 
     this.cursor = null;
     this.filters = null;
+    this.pendingDestroy = false;
 
     if (!soft)
     {

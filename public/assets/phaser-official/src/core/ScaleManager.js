@@ -175,15 +175,6 @@ Phaser.ScaleManager = function (game, width, height) {
     this._pageAlignVertically = false;
 
     /**
-    * The maximum number of times a canvas will be resized (in a row) in order to fill the browser.
-    * @property {number} maxIterations    
-    * @protected
-    * @see {@link Phaser.ScaleManger#refresh refresh}
-    * @deprecated 2.2.0 - This is not used anymore as reflow iterations are "automatic".
-    */
-    this.maxIterations = 5;
-
-    /**
     * This signal is dispatched when the orientation changes _or_ the validity of the current orientation changes.
     * 
     * The signal is supplied with the following arguments:
@@ -208,28 +199,6 @@ Phaser.ScaleManager = function (game, width, height) {
     * @public
     */
     this.onOrientationChange = new Phaser.Signal();
-
-    /**
-    * This signal is dispatched when the browser enters landscape orientation, having been in portrait.
-    *
-    * This is signaled from  `preUpdate` (or `pauseUpdate`) _even when_ the game is paused.
-    *
-    * @property {Phaser.Signal} enterLandscape
-    * @public
-    * @deprecated 2.2.0 - Use {@link Phaser.ScaleManager#onOrientationChange onOrientationChange}
-    */
-    this.enterLandscape = new Phaser.Signal();
-
-    /**
-    * This signal is dispatched when the browser enters portrait orientation, having been in landscape.
-    *
-    * This is signaled from `preUpdate` (or `pauseUpdate`) _even when_ the game is paused.
-    *
-    * @property {Phaser.Signal} enterPortrait
-    * @public
-    * @deprecated 2.2.0 - Use {@link Phaser.ScaleManager#onOrientationChange onOrientationChange}
-    */
-    this.enterPortrait = new Phaser.Signal();
 
     /**
     * This signal is dispatched when the browser enters an incorrect orientation, as defined by {@link #forceOrientation}.
@@ -318,34 +287,6 @@ Phaser.ScaleManager = function (game, width, height) {
     * @public
     */
     this.onFullScreenError = new Phaser.Signal();
-
-    /**
-    * This signal is dispatched when the browser enters fullscreen mode, if supported.
-    *
-    * @property {Phaser.Signal} enterFullScreen
-    * @public
-    * @deprecated 2.2.0 - Use {@link Phaser.ScaleManager#onFullScreenChange onFullScreenChange}
-    */
-    this.enterFullScreen = new Phaser.Signal();
-
-    /**
-    * This signal is dispatched when the browser leaves fullscreen mode.
-    *
-    * @property {Phaser.Signal} leaveFullScreen
-    * @public
-    * @deprecated 2.2.0 - Use {@link Phaser.ScaleManager#onFullScreenChange onFullScreenChange}
-    */
-    this.leaveFullScreen = new Phaser.Signal();
-
-    /**
-    * This signal is dispatched when the browser fails to enter fullscreen mode;
-    * or if the device does not support fullscreen mode and {@link #startFullScreen} is invoked.
-    *
-    * @property {Phaser.Signal} fullScreenFailed
-    * @public
-    * @deprecated 2.2.0 - Use {@link Phaser.ScaleManager#onFullScreenError onFullScreenError}
-    */
-    this.fullScreenFailed = this.onFullScreenError;
 
     /**
     * The _last known_ orientation of the screen, as defined in the Window Screen Web API.
@@ -548,6 +489,12 @@ Phaser.ScaleManager = function (game, width, height) {
     this.onResizeContext = null;
 
     /**
+    * @property {integer} _pendingScaleMode - Used to retain the scale mode if set from config before Boot.
+    * @private
+    */
+    this._pendingScaleMode = null;
+
+    /**
     * Information saved when fullscreen mode is started.
     * @property {?object} _fullScreenRestore
     * @private
@@ -626,6 +573,12 @@ Phaser.ScaleManager = function (game, width, height) {
     */
     this._lastReportedGameSize = new Phaser.Rectangle();
 
+    /**
+    * @property {boolean} _booted - ScaleManager booted state.
+    * @private
+    */
+    this._booted = false;
+
     if (game.config)
     {
         this.parseConfig(game.config);
@@ -674,7 +627,6 @@ Phaser.ScaleManager.RESIZE = 3;
 * @type {integer}
 */
 Phaser.ScaleManager.USER_SCALE = 4;
-
 
 Phaser.ScaleManager.prototype = {
 
@@ -766,7 +718,18 @@ Phaser.ScaleManager.prototype = {
         // Don't use updateOrientationState so events are not fired
         this.screenOrientation = this.dom.getScreenOrientation(this.compatibility.orientationFallback);
 
-        this.grid = new Phaser.FlexGrid(this, this.width, this.height);
+        if (Phaser.FlexGrid)
+        {
+            this.grid = new Phaser.FlexGrid(this, this.width, this.height);
+        }
+
+        this._booted = true;
+
+        if (this._pendingScaleMode)
+        {
+            this.scaleMode = this._pendingScaleMode;
+            this._pendingScaleMode = null;
+        }
 
     },
 
@@ -781,7 +744,14 @@ Phaser.ScaleManager.prototype = {
 
         if (config['scaleMode'])
         {
-            this.scaleMode = config['scaleMode'];
+            if (this._booted)
+            {
+                this.scaleMode = config['scaleMode'];
+            }
+            else
+            {
+                this._pendingScaleMode = config['scaleMode'];
+            }
         }
 
         if (config['fullScreenScaleMode'])
@@ -991,7 +961,10 @@ Phaser.ScaleManager.prototype = {
             this._lastReportedCanvasSize.setTo(0, 0, width, height);
             this._lastReportedGameSize.setTo(0, 0, this.game.width, this.game.height);
 
-            this.grid.onResize(width, height);
+            if (this.grid)
+            {
+                this.grid.onResize(width, height);
+            }
 
             this.onSizeChange.dispatch(this, width, height);
 
@@ -1188,7 +1161,7 @@ Phaser.ScaleManager.prototype = {
     */
     forceOrientation: function (forceLandscape, forcePortrait) {
 
-        if (typeof forcePortrait === 'undefined') { forcePortrait = false; }
+        if (forcePortrait === undefined) { forcePortrait = false; }
 
         this.forceLandscape = forceLandscape;
         this.forcePortrait = forcePortrait;
@@ -1241,18 +1214,6 @@ Phaser.ScaleManager.prototype = {
 
         var changed = previousOrientation !== this.screenOrientation;
         var correctnessChanged = previouslyIncorrect !== this.incorrectOrientation;
-
-        if (changed)
-        {
-            if (this.isLandscape)
-            {
-                this.enterLandscape.dispatch(this.orientation, true, false);
-            }
-            else
-            {
-                this.enterPortrait.dispatch(this.orientation, false, true);
-            }
-        }
 
         if (correctnessChanged)
         {
@@ -1460,8 +1421,9 @@ Phaser.ScaleManager.prototype = {
         {
             // Ref. http://msdn.microsoft.com/en-us/library/hh781509(v=vs.85).aspx for getBoundingClientRect
             var clientRect = parentNode.getBoundingClientRect();
+            var parentRect = (parentNode.offsetParent) ? parentNode.offsetParent.getBoundingClientRect() : parentNode.getBoundingClientRect();
 
-            bounds.setTo(clientRect.left, clientRect.top, clientRect.width, clientRect.height);
+            bounds.setTo(clientRect.left - parentRect.left, clientRect.top - parentRect.top, clientRect.width, clientRect.height);
 
             var wc = this.windowConstraints;
 
@@ -1622,8 +1584,8 @@ Phaser.ScaleManager.prototype = {
     */
     resetCanvas: function (cssWidth, cssHeight) {
 
-        if (typeof cssWidth === 'undefined') { cssWidth = this.width + 'px'; }
-        if (typeof cssHeight === 'undefined') { cssHeight = this.height + 'px'; }
+        if (cssWidth === undefined) { cssWidth = this.width + 'px'; }
+        if (cssHeight === undefined) { cssHeight = this.height + 'px'; }
 
         var canvas = this.game.canvas;
 
@@ -1667,7 +1629,7 @@ Phaser.ScaleManager.prototype = {
     */
     reset: function (clearWorld) {
 
-        if (clearWorld)
+        if (clearWorld && this.grid)
         {
             this.grid.reset();
         }
@@ -1967,8 +1929,6 @@ Phaser.ScaleManager.prototype = {
 
             this.updateLayout();
             this.queueUpdate(true);
-
-            this.enterFullScreen.dispatch(this.width, this.height);
         }
         else
         {
@@ -1978,11 +1938,9 @@ Phaser.ScaleManager.prototype = {
 
             this.updateLayout();
             this.queueUpdate(true);
-
-            this.leaveFullScreen.dispatch(this.width, this.height);
         }
 
-        this.onFullScreenChange.dispatch(this);
+        this.onFullScreenChange.dispatch(this, this.width, this.height);
 
     },
 
@@ -2023,11 +1981,17 @@ Phaser.ScaleManager.prototype = {
     */
     scaleSprite: function (sprite, width, height, letterBox) {
 
-        if (typeof width === 'undefined') { width = this.width; }
-        if (typeof height === 'undefined') { height = this.height; }
-        if (typeof letterBox === 'undefined') { letterBox = false; }
+        if (width === undefined) { width = this.width; }
+        if (height === undefined) { height = this.height; }
+        if (letterBox === undefined) { letterBox = false; }
 
-        sprite.scale.set(1);
+        if (!sprite || !sprite['scale'])
+        {
+            return sprite;
+        }
+
+        sprite.scale.x = 1;
+        sprite.scale.y = 1;
 
         if ((sprite.width <= 0) || (sprite.height <= 0) || (width <= 0) || (height <= 0))
         {
@@ -2104,76 +2068,6 @@ Phaser.ScaleManager.prototype = {
 Phaser.ScaleManager.prototype.constructor = Phaser.ScaleManager;
 
 /**
-* window.resize event handler.
-* @method checkResize
-* @memberof Phaser.ScaleManager
-* @protected
-* @deprecated 2.2.0 - This method is INTERNAL: avoid using it directly.
-*/
-Phaser.ScaleManager.prototype.checkResize = Phaser.ScaleManager.prototype.windowResize;
-
-/**
-* window.orientationchange event handler.
-* @method checkOrientation
-* @memberof Phaser.ScaleManager
-* @protected
-* @deprecated 2.2.0 - This method is INTERNAL: avoid using it directly.
-*/
-Phaser.ScaleManager.prototype.checkOrientation = Phaser.ScaleManager.prototype.orientationChange;
-
-/**
-* Updates the size of the Game or the size/position of the Display canvas based on internal state.
-*
-* Do not call this directly. To "refresh" the layout use {@link Phaser.ScaleManager#refresh refresh}.
-* To precisely control the scaling/size, apply appropriate rules to the bounding Parent container or
-* use the {@link Phaser.ScaleManager#scaleMode USER_SCALE scale mode}.
-*
-* @method Phaser.ScaleManager#setScreenSize
-* @protected
-* @deprecated 2.2.0 - This method is INTERNAL: avoid using it directly.
-*/
-Phaser.ScaleManager.prototype.setScreenSize = Phaser.ScaleManager.prototype.updateLayout;
-
-/**
-* Updates the size/position of the Display canvas based on internal state.
-*
-* Do not call this directly. To "refresh" the layout use {@link Phaser.ScaleManager#refresh refresh}.
-* To precisely control the scaling/size, apply appropriate rules to the bounding Parent container or
-* use the {@link Phaser.ScaleManager#scaleMode USER_SCALE scale mode}.
-*
-* @method setSize
-* @memberof Phaser.ScaleManager
-* @protected
-* @deprecated 2.2.0 - This method is INTERNAL: avoid using it directly.
-*/
-Phaser.ScaleManager.prototype.setSize = Phaser.ScaleManager.prototype.reflowCanvas;
-
-/**
-* Checks if the browser is in the correct orientation for the game,
-* dependent upon {@link #forceLandscape} and {@link #forcePortrait}, and updates the state.
-*
-* The appropriate event is dispatched if the orientation became valid or invalid.
-* 
-* @method checkOrientationState
-* @memberof Phaser.ScaleManager
-* @protected
-* @return {boolean} True if the orientation state changed (consider a refresh)
-* @deprecated 2.2.0 - This is only for backward compatibility of user code.
-*/
-Phaser.ScaleManager.prototype.checkOrientationState = function () {
-
-    var changed = this.updateOrientationState();
-
-    if (changed)
-    {
-        this.refresh();
-    }
-
-    return changed;
-
-};
-
-/**
 * The DOM element that is considered the Parent bounding element, if any.
 *
 * This `null` if {@link #parentIsWindow} is true or if fullscreen mode is entered and {@link #fullScreenTarget} is specified.
@@ -2210,7 +2104,7 @@ Object.defineProperty(Phaser.ScaleManager.prototype, "boundingParent", {
 *   <dt>{@link Phaser.ScaleManager.EXACT_FIT}</dt>
 *   <dd>
 *       The Game display area will be _stretched_ to fill the entire size of the canvas's parent element and/or screen.
-*       Proportions are not mainted.
+*       Proportions are not maintained.
 *   </dd>
 *   <dt>{@link Phaser.ScaleManager.SHOW_ALL}</dt>
 *   <dd>
@@ -2437,21 +2331,6 @@ Object.defineProperty(Phaser.ScaleManager.prototype, "isLandscape", {
 
     get: function () {
         return this.classifyOrientation(this.screenOrientation) === 'landscape';
-    }
-
-});
-
-/**
-* The _last known_ orientation value of the screen. A value of 90 is landscape and 0 is portrait.
-* @name Phaser.ScaleManager#orientation
-* @property {integer} orientation
-* @readonly
-* @deprecated 2.2.0 - Use {@link #screenOrientation} instead.
-*/
-Object.defineProperty(Phaser.ScaleManager.prototype, "orientation", {
-
-    get: function () {
-        return (this.classifyOrientation(this.screenOrientation) === 'portrait' ? 0 : 90);
     }
 
 });

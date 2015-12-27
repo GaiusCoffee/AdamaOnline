@@ -17,13 +17,13 @@
             this.preloadBar.anchor.set(0.5, 0.5);
             this.load.setPreloadSprite(this.preloadBar);
             this.load.image('titleButtonUpOnline', 
-                            '../assets/_images/ui/blue_button_up.png');
+                            '../images/ui/blue_button_up.png');
             this.load.image('titleButtonDownOnline', 
-                            '../assets/_images/ui/blue_button_down.png');
+                            '../images/ui/blue_button_down.png');
             this.load.image('titleButtonUpOffline', 
-                            '../assets/_images/ui/grey_button_up.png');
+                            '../images/ui/grey_button_up.png');
             this.load.image('titleButtonDownOffline', 
-                            '../assets/_images/ui/grey_button_down.png');
+                            '../images/ui/grey_button_down.png');
         },
         create: function () {
             this.state.start('Title');

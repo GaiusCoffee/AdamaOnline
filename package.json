@@ -15,6 +15,7 @@
     "jade": "~1.9.2",
     "morgan": "~1.5.1",
     "rsvp": "~3.0.16",
-    "serve-favicon": "~2.2.0"
+    "serve-favicon": "~2.2.0",
+    "nedb": "^1.5.0"
   }
 }

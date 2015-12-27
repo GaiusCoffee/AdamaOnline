@@ -346,10 +346,10 @@ Phaser.Particles.Arcade.Emitter.prototype.update = function () {
 */
 Phaser.Particles.Arcade.Emitter.prototype.makeParticles = function (keys, frames, quantity, collide, collideWorldBounds) {
 
-    if (typeof frames === 'undefined') { frames = 0; }
-    if (typeof quantity === 'undefined') { quantity = this.maxParticles; }
-    if (typeof collide === 'undefined') { collide = false; }
-    if (typeof collideWorldBounds === 'undefined') { collideWorldBounds = false; }
+    if (frames === undefined) { frames = 0; }
+    if (quantity === undefined) { quantity = this.maxParticles; }
+    if (collide === undefined) { collide = false; }
+    if (collideWorldBounds === undefined) { collideWorldBounds = false; }
 
     var particle;
     var i = 0;
@@ -460,9 +460,9 @@ Phaser.Particles.Arcade.Emitter.prototype.explode = function (lifespan, quantity
 */
 Phaser.Particles.Arcade.Emitter.prototype.flow = function (lifespan, frequency, quantity, total, immediate) {
 
-    if (typeof quantity === 'undefined' || quantity === 0) { quantity = 1; }
-    if (typeof total === 'undefined') { total = -1; }
-    if (typeof immediate === 'undefined') { immediate = true; }
+    if (quantity === undefined || quantity === 0) { quantity = 1; }
+    if (total === undefined) { total = -1; }
+    if (immediate === undefined) { immediate = true; }
 
     if (quantity > this.maxParticles)
     {
@@ -500,11 +500,11 @@ Phaser.Particles.Arcade.Emitter.prototype.flow = function (lifespan, frequency, 
 */
 Phaser.Particles.Arcade.Emitter.prototype.start = function (explode, lifespan, frequency, quantity, forceQuantity) {
 
-    if (typeof explode === 'undefined') { explode = true; }
-    if (typeof lifespan === 'undefined') { lifespan = 0; }
-    if (typeof frequency === 'undefined' || frequency === null) { frequency = 250; }
-    if (typeof quantity === 'undefined') { quantity = 0; }
-    if (typeof forceQuantity === 'undefined') { forceQuantity = false; }
+    if (explode === undefined) { explode = true; }
+    if (lifespan === undefined) { lifespan = 0; }
+    if (frequency === undefined || frequency === null) { frequency = 250; }
+    if (quantity === undefined) { quantity = 0; }
+    if (forceQuantity === undefined) { forceQuantity = false; }
 
     if (quantity > this.maxParticles)
     {
@@ -536,12 +536,23 @@ Phaser.Particles.Arcade.Emitter.prototype.start = function (explode, lifespan, f
 };
 
 /**
-* This function can be used both internally and externally to emit the next particle in the queue.
+* This function is used internally to emit the next particle in the queue.
+*
+* However it can also be called externally to emit a particle.
+*
+* When called externally you can use the arguments to override any defaults the Emitter has set.
 *
 * @method Phaser.Particles.Arcade.Emitter#emitParticle
+* @param {number} [x] - The x coordinate to emit the particle from. If `null` or `undefined` it will use `Emitter.emitX` or if the Emitter has a width > 1 a random value between `Emitter.left` and `Emitter.right`.
+* @param {number} [y] - The y coordinate to emit the particle from. If `null` or `undefined` it will use `Emitter.emitY` or if the Emitter has a height > 1 a random value between `Emitter.top` and `Emitter.bottom`.
+* @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - This is the image or texture used by the Particle during rendering. It can be a string which is a reference to the Cache Image entry, or an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+* @param {string|number} [frame] - If this Particle is using part of a sprite sheet or texture atlas you can specify the exact frame to use by giving a string or numeric index.
 * @return {boolean} True if a particle was emitted, otherwise false.
 */
-Phaser.Particles.Arcade.Emitter.prototype.emitParticle = function () {
+Phaser.Particles.Arcade.Emitter.prototype.emitParticle = function (x, y, key, frame) {
+
+    if (x === undefined) { x = null; }
+    if (y === undefined) { y = null; }
 
     var particle = this.getFirstExists(false);
 
@@ -550,14 +561,39 @@ Phaser.Particles.Arcade.Emitter.prototype.emitParticle = function () {
         return false;
     }
 
-    if (this.width > 1 || this.height > 1)
+    var rnd = this.game.rnd;
+
+    if (key !== undefined && frame !== undefined)
     {
-        particle.reset(this.game.rnd.integerInRange(this.left, this.right), this.game.rnd.integerInRange(this.top, this.bottom));
+        particle.loadTexture(key, frame);
     }
-    else
+    else if (key !== undefined)
     {
-        particle.reset(this.emitX, this.emitY);
+        particle.loadTexture(key);
     }
+
+    var emitX = this.emitX;
+    var emitY = this.emitY;
+
+    if (x !== null)
+    {
+        emitX = x;
+    }
+    else if (this.width > 1)
+    {
+        emitX = rnd.between(this.left, this.right);
+    }
+
+    if (y !== null)
+    {
+        emitY = y;
+    }
+    else if (this.height > 1)
+    {
+        emitY = rnd.between(this.top, this.bottom);
+    }
+
+    particle.reset(emitX, emitY);
 
     particle.angle = 0;
     particle.lifespan = this.lifespan;
@@ -577,20 +613,23 @@ Phaser.Particles.Arcade.Emitter.prototype.emitParticle = function () {
     }
     else if (this.minParticleScale !== 1 || this.maxParticleScale !== 1)
     {
-        particle.scale.set(this.game.rnd.realInRange(this.minParticleScale, this.maxParticleScale));
+        particle.scale.set(rnd.realInRange(this.minParticleScale, this.maxParticleScale));
     }
     else if ((this._minParticleScale.x !== this._maxParticleScale.x) || (this._minParticleScale.y !== this._maxParticleScale.y))
     {
-        particle.scale.set(this.game.rnd.realInRange(this._minParticleScale.x, this._maxParticleScale.x), this.game.rnd.realInRange(this._minParticleScale.y, this._maxParticleScale.y));
+        particle.scale.set(rnd.realInRange(this._minParticleScale.x, this._maxParticleScale.x), rnd.realInRange(this._minParticleScale.y, this._maxParticleScale.y));
     }
 
-    if (Array.isArray(this._frames === 'object'))
+    if (frame === undefined)
     {
-        particle.frame = this.game.rnd.pick(this._frames);
-    }
-    else
-    {
-        particle.frame = this._frames;
+        if (Array.isArray(this._frames))
+        {
+            particle.frame = this.game.rnd.pick(this._frames);
+        }
+        else
+        {
+            particle.frame = this._frames;
+        }
     }
 
     if (this.autoAlpha)
@@ -599,25 +638,24 @@ Phaser.Particles.Arcade.Emitter.prototype.emitParticle = function () {
     }
     else
     {
-        particle.alpha = this.game.rnd.realInRange(this.minParticleAlpha, this.maxParticleAlpha);
+        particle.alpha = rnd.realInRange(this.minParticleAlpha, this.maxParticleAlpha);
     }
 
     particle.blendMode = this.blendMode;
 
-    particle.body.updateBounds();
+    var body = particle.body;
 
-    particle.body.bounce.setTo(this.bounce.x, this.bounce.y);
+    body.updateBounds();
 
-    particle.body.velocity.x = this.game.rnd.between(this.minParticleSpeed.x, this.maxParticleSpeed.x);
-    particle.body.velocity.y = this.game.rnd.between(this.minParticleSpeed.y, this.maxParticleSpeed.y);
-    particle.body.angularVelocity = this.game.rnd.between(this.minRotation, this.maxRotation);
+    body.bounce.copyFrom(this.bounce);
+    body.drag.copyFrom(this.particleDrag);
 
-    particle.body.gravity.y = this.gravity;
+    body.velocity.x = rnd.between(this.minParticleSpeed.x, this.maxParticleSpeed.x);
+    body.velocity.y = rnd.between(this.minParticleSpeed.y, this.maxParticleSpeed.y);
+    body.angularVelocity = rnd.between(this.minRotation, this.maxRotation);
 
-    particle.body.drag.x = this.particleDrag.x;
-    particle.body.drag.y = this.particleDrag.y;
-
-    particle.body.angularDrag = this.angularDrag;
+    body.gravity.y = this.gravity;
+    body.angularDrag = this.angularDrag;
 
     particle.onEmit();
 
@@ -715,11 +753,11 @@ Phaser.Particles.Arcade.Emitter.prototype.setRotation = function (min, max) {
 */
 Phaser.Particles.Arcade.Emitter.prototype.setAlpha = function (min, max, rate, ease, yoyo) {
 
-    if (typeof min === 'undefined') { min = 1; }
-    if (typeof max === 'undefined') { max = 1; }
-    if (typeof rate === 'undefined') { rate = 0; }
-    if (typeof ease === 'undefined') { ease = Phaser.Easing.Linear.None; }
-    if (typeof yoyo === 'undefined') { yoyo = false; }
+    if (min === undefined) { min = 1; }
+    if (max === undefined) { max = 1; }
+    if (rate === undefined) { rate = 0; }
+    if (ease === undefined) { ease = Phaser.Easing.Linear.None; }
+    if (yoyo === undefined) { yoyo = false; }
 
     this.minParticleAlpha = min;
     this.maxParticleAlpha = max;
@@ -756,13 +794,13 @@ Phaser.Particles.Arcade.Emitter.prototype.setAlpha = function (min, max, rate, e
 */
 Phaser.Particles.Arcade.Emitter.prototype.setScale = function (minX, maxX, minY, maxY, rate, ease, yoyo) {
 
-    if (typeof minX === 'undefined') { minX = 1; }
-    if (typeof maxX === 'undefined') { maxX = 1; }
-    if (typeof minY === 'undefined') { minY = 1; }
-    if (typeof maxY === 'undefined') { maxY = 1; }
-    if (typeof rate === 'undefined') { rate = 0; }
-    if (typeof ease === 'undefined') { ease = Phaser.Easing.Linear.None; }
-    if (typeof yoyo === 'undefined') { yoyo = false; }
+    if (minX === undefined) { minX = 1; }
+    if (maxX === undefined) { maxX = 1; }
+    if (minY === undefined) { minY = 1; }
+    if (maxY === undefined) { maxY = 1; }
+    if (rate === undefined) { rate = 0; }
+    if (ease === undefined) { ease = Phaser.Easing.Linear.None; }
+    if (yoyo === undefined) { yoyo = false; }
 
     //  Reset these
     this.minParticleScale = 1;

@@ -17,7 +17,7 @@ Phaser.Component.ScaleMinMax.prototype = {
     * The callback that will apply any scale limiting to the worldTransform.
     * @property {function} transformCallback
     */
-    transformCallback: this.checkTransform,
+    transformCallback: null,
 
     /**
     * The context under which `transformCallback` is called.
@@ -109,12 +109,12 @@ Phaser.Component.ScaleMinMax.prototype = {
      */
     setScaleMinMax: function (minX, minY, maxX, maxY) {
 
-        if (typeof minY === 'undefined')
+        if (minY === undefined)
         {
             //  1 parameter, set all to it
             minY = maxX = maxY = minX;
         }
-        else if (typeof maxX === 'undefined')
+        else if (maxX === undefined)
         {
             //  2 parameters, the first is min, the second max
             maxX = maxY = minY;
@@ -151,6 +151,16 @@ Phaser.Component.ScaleMinMax.prototype = {
             {
                 this.scaleMax = new Phaser.Point(maxX, maxY);
             }
+        }
+
+        if (this.scaleMin === null)
+        {
+            this.transformCallback = null;
+        }
+        else
+        {
+            this.transformCallback = this.checkTransform;
+            this.transformCallbackContext = this;
         }
 
     }
