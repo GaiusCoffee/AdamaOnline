@@ -1,0 +1,16 @@
+{
+  "name": "adamaonline",
+  "version": "0.0.1",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "public/assets/",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "headjs": "~1.0.3",
+    "phaser-official": "~2.4.4"
+  }
+}
